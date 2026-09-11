@@ -1,0 +1,2 @@
+ALTER TABLE chat_settings
+    ADD COLUMN IF NOT EXISTS glupy_reply_enabled BOOLEAN NOT NULL DEFAULT TRUE;

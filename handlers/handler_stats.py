@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from database.repository import (
+    get_activity_insights,
     get_chat_statistics,
     get_most_frequent_word,
     get_rich_statistics,
@@ -106,6 +107,11 @@ async def build_statistics_text(
             chat_telegram_id=chat_telegram_id,
             since=since,
         )
+        insights = await get_activity_insights(
+            session,
+            chat_telegram_id=chat_telegram_id,
+            since=since,
+        )
         users = await get_user_statistics(
             session,
             chat_telegram_id=chat_telegram_id,
@@ -126,7 +132,14 @@ async def build_statistics_text(
             since=since,
         )
 
-    media_counts, total_emojis, total_reactions, common_emoji, common_emoji_count = rich
+    (
+        media_counts,
+        total_emojis,
+        total_reactions,
+        common_emoji,
+        common_emoji_count,
+    ) = rich
+    active_users, average_characters, peak_hour = insights
     media_labels = {
         "photo": "🖼 Картинок",
         "document": "📎 Файлов",
@@ -143,7 +156,7 @@ async def build_statistics_text(
         if media_counts.get(content_type)
     ]
     extras_lines = media_lines if detailed else []
-    if total_emojis:
+    if detailed and total_emojis:
         emoji_text = f"😀 Эмодзи: <b>{total_emojis}</b>"
         extras_lines.append(emoji_text)
         if common_emoji:
@@ -151,7 +164,7 @@ async def build_statistics_text(
                 f"🔥 Частый эмодзи: <b>{html.escape(common_emoji)}</b> "
                 f"({common_emoji_count} раз.)"
             )
-    if total_reactions:
+    if detailed and total_reactions:
         extras_lines.append(f"🌭 Реакций: <b>{total_reactions}</b>")
     extras_text = "\n".join(extras_lines)
     quote_text = ""
@@ -171,7 +184,15 @@ async def build_statistics_text(
         if frequent_word
         else "нет данных"
     )
+    peak_hour_text = (
+        f"🕒 Самый активный час: <b>{peak_hour:02d}:00–{peak_hour:02d}:59</b>\n\n"
+        if peak_hour is not None
+        else "\n"
+    )
     detailed_text = (
+        f"👤 Активных участников: <b>{active_users}</b>\n"
+        f"📏 В среднем символов в сообщении: <b>{average_characters:.1f}</b>\n"
+        f"{peak_hour_text}"
         f"{extras_text + chr(10) + chr(10) if extras_text else ''}"
         f"🔥 Частое слово: <b>{frequent_text}</b>\n\n"
         "👥 <b>По пользователям</b>\n"

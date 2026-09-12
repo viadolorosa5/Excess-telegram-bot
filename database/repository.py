@@ -402,6 +402,53 @@ async def get_chat_statistics(
     return int(count), int(characters)
 
 
+async def get_activity_insights(
+    session: AsyncSession,
+    *,
+    chat_telegram_id: int,
+    since: datetime.datetime,
+) -> tuple[int, float, int | None]:
+    summary_query = (
+        select(
+            func.count(func.distinct(Message.user_id)),
+            func.coalesce(
+                func.avg(func.length(Message.message_text)),
+                0,
+            ),
+        )
+        .join(Chat)
+        .where(
+            Chat.telegram_id == chat_telegram_id,
+            Message.sent_at >= since,
+            Message.user_id.is_not(None),
+        )
+    )
+    active_users, average_characters = (
+        await session.execute(summary_query)
+    ).one()
+
+    peak_query = (
+        select(
+            func.extract("hour", Message.sent_at).label("hour"),
+            func.count(Message.id).label("message_count"),
+        )
+        .join(Chat)
+        .where(
+            Chat.telegram_id == chat_telegram_id,
+            Message.sent_at >= since,
+        )
+        .group_by("hour")
+        .order_by(func.count(Message.id).desc(), "hour")
+        .limit(1)
+    )
+    peak = (await session.execute(peak_query)).first()
+    return (
+        int(active_users or 0),
+        float(average_characters or 0),
+        int(peak.hour) if peak else None,
+    )
+
+
 def extract_emojis(value: str) -> list[str]:
     return re.findall(
         r"[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u2600-\u27BF]",

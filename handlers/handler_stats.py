@@ -2,13 +2,11 @@ import datetime
 import html
 from io import BytesIO
 
-from aiogram import F, Router
-from aiogram.filters import Command
+from aiogram import Bot, F, Router
+from aiogram.filters import Command, CommandObject
 from aiogram.types import (
     BufferedInputFile,
-    Bot,
     CallbackQuery,
-    CommandObject,
     InputMediaPhoto,
     Message,
 )

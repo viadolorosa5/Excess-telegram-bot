@@ -361,7 +361,7 @@ async def get_due_reminders(
                     )
                 )
             ),
-        ),
+        )
     )
     rows = (await session.execute(query)).all()
     return [

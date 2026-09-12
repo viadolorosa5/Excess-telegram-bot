@@ -185,7 +185,7 @@ async def build_statistics_text(
         f"📊 <b>Статистика за {period_name}</b>\n\n"
         f"💬 Сообщений: <b>{count}</b>\n"
         f"🔤 Символов: <b>{characters}</b>\n"
-        f"{stats_details}"
+        f"\n{stats_details}"
         f"{quote_text if detailed else ''}"
     )
 

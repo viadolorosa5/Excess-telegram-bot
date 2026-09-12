@@ -125,6 +125,9 @@ class ChatSettings(Base):
     glupy_reply_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=text("true")
     )
+    stats_show_usernames: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
     timezone: Mapped[str] = mapped_column(
         Text, nullable=False, server_default=text("'UTC'")
     )

@@ -6,7 +6,9 @@ from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import (
     BufferedInputFile,
+    Bot,
     CallbackQuery,
+    CommandObject,
     InputMediaPhoto,
     Message,
 )
@@ -23,10 +25,12 @@ from database.repository import (
     get_most_frequent_word,
     get_rich_statistics,
     get_random_quote,
+    get_stats_show_usernames,
     get_user_statistics,
 )
 from keyboards.statistics import statistics_keyboard
-from handlers.shared import reject_private_chat
+from database.repository import update_chat_setting
+from handlers.shared import reject_if_not_admin, reject_private_chat
 
 
 router = Router()
@@ -41,6 +45,7 @@ def format_user_statistics(
     rows: list[tuple],
     *,
     detailed: bool,
+    show_usernames: bool,
 ) -> str:
     if not rows:
         return "нет сообщений"
@@ -59,8 +64,8 @@ def format_user_statistics(
         common_emoji,
         common_emoji_count,
     ) in rows:
-        if username:
-            name = f"@{username}"
+        if username and show_usernames:
+            name = f"<code>@{html.escape(username)}</code>"
         else:
             name = " ".join(part for part in (first_name, last_name) if part)
             name = name or "Неизвестный пользователь"
@@ -103,34 +108,32 @@ def create_activity_chart(
     messages = [message_count for _, message_count, _ in buckets]
     characters = [character_count for _, _, character_count in buckets]
 
-    figure, axes = plt.subplots(figsize=(10, 5), dpi=160)
-    characters_axes = axes.twinx()
-    messages_line = axes.plot(
+    figure, (messages_axes, characters_axes) = plt.subplots(
+        2, 1, figsize=(10, 7), dpi=160, sharex=True
+    )
+    messages_axes.plot(
         labels,
         messages,
         color="#2563eb",
         marker="o",
         linewidth=2.2,
-        label="Сообщения",
-    )[0]
-    characters_line = characters_axes.plot(
+    )
+    characters_axes.plot(
         labels,
         characters,
         color="#f97316",
         marker="o",
         linewidth=2.2,
-        label="Символы",
-    )[0]
-    axes.set_title(f"Активность чата за {period_name}")
-    axes.set_xlabel("Время" if period == "day" else "Дата")
-    axes.set_ylabel("Сообщения", color="#2563eb")
-    characters_axes.set_ylabel("Символы", color="#f97316")
-    axes.grid(True, alpha=0.25)
-    axes.legend(
-        [messages_line, characters_line],
-        ["Сообщения", "Символы"],
-        loc="upper left",
     )
+    messages_axes.set_title(f"Сообщения за {period_name}")
+    messages_axes.set_ylabel("Количество")
+    messages_axes.tick_params(axis="y", labelcolor="#2563eb")
+    characters_axes.set_title(f"Символы за {period_name}")
+    characters_axes.set_ylabel("Символы", color="#f97316")
+    characters_axes.set_xlabel("Время" if period == "day" else "Дата")
+    characters_axes.tick_params(axis="y", labelcolor="#f97316")
+    messages_axes.grid(True, alpha=0.25)
+    characters_axes.grid(True, alpha=0.25)
     figure.autofmt_xdate()
     figure.tight_layout()
 
@@ -196,6 +199,10 @@ async def build_statistics_text(
             session,
             chat_telegram_id=chat_telegram_id,
             since=since,
+        )
+        show_usernames = await get_stats_show_usernames(
+            session,
+            chat_telegram_id=chat_telegram_id,
         )
         users = await get_user_statistics(
             session,
@@ -280,9 +287,13 @@ async def build_statistics_text(
         f"{extras_text + chr(10) + chr(10) if extras_text else ''}"
         f"🔥 Частое слово: <b>{frequent_text}</b>\n\n"
         "👥 <b>По пользователям</b>\n"
-        f"{format_user_statistics(users, detailed=True)}"
+        f"{format_user_statistics(users, detailed=True, show_usernames=show_usernames)}"
     )
-    users_text = format_user_statistics(users, detailed=detailed)
+    users_text = format_user_statistics(
+        users,
+        detailed=detailed,
+        show_usernames=show_usernames,
+    )
     stats_details = detailed_text if detailed else (
         "👥 <b>По пользователям</b>\n" + users_text
     )
@@ -312,6 +323,39 @@ async def handle_stats(
         text,
         parse_mode="HTML",
         reply_markup=statistics_keyboard("day"),
+    )
+
+
+@router.message(Command("stats_usernames"))
+async def handle_stats_usernames(
+    message: Message,
+    command: CommandObject,
+    bot: Bot,
+    session_factory: async_sessionmaker,
+) -> None:
+    if await reject_private_chat(message) or await reject_if_not_admin(bot, message):
+        return
+    value = (command.args or "").strip().casefold()
+    if value not in {"on", "off"}:
+        await message.answer(
+            "Использование: <code>/stats_usernames on|off</code>\n"
+            "on — показывать username без активной ссылки, off — имя пользователя.",
+            parse_mode="HTML",
+        )
+        return
+    async with session_factory() as session:
+        await update_chat_setting(
+            session,
+            chat_telegram_id=message.chat.id,
+            chat_title=message.chat.title,
+            chat_type=message.chat.type,
+            field_name="stats_show_usernames",
+            value=value == "on",
+        )
+        await session.commit()
+    await message.answer(
+        "✅ В статистике будут отображаться "
+        + ("username без упоминания." if value == "on" else "имена пользователей."),
     )
 
 

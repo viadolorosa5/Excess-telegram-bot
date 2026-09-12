@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS chat_settings (
     glupy_cooldown_minutes INTEGER NOT NULL DEFAULT 10 CHECK (glupy_cooldown_minutes >= 0),
     glupy_max_length INTEGER NOT NULL DEFAULT 200 CHECK (glupy_max_length BETWEEN 2 AND 4096),
     glupy_reply_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    stats_show_usernames BOOLEAN NOT NULL DEFAULT TRUE,
     timezone TEXT NOT NULL DEFAULT 'UTC',
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

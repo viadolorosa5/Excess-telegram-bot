@@ -98,6 +98,13 @@ async def create_database_schema(engine: AsyncEngine) -> None:
                 "ADD COLUMN IF NOT EXISTS media_file_id TEXT"
             )
         )
+        await connection.execute(
+            text(
+                "ALTER TABLE chat_settings "
+                "ADD COLUMN IF NOT EXISTS stats_show_usernames "
+                "BOOLEAN NOT NULL DEFAULT TRUE"
+            )
+        )
 
 
 def create_session_factory(engine: AsyncEngine) -> async_sessionmaker:

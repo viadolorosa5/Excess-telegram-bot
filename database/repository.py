@@ -74,6 +74,7 @@ async def update_chat_setting(
         "glupy_cooldown_minutes",
         "glupy_max_length",
         "glupy_reply_enabled",
+        "stats_show_usernames",
     }:
         raise ValueError(f"Недопустимая настройка: {field_name}")
     setattr(settings, field_name, value)
@@ -244,6 +245,19 @@ async def get_babel_probability(
         .where(Chat.telegram_id == chat_telegram_id)
     )
     return int(probability) if probability is not None else 20
+
+
+async def get_stats_show_usernames(
+    session: AsyncSession,
+    *,
+    chat_telegram_id: int,
+) -> bool:
+    value = await session.scalar(
+        select(ChatSettings.stats_show_usernames)
+        .join(Chat, Chat.id == ChatSettings.chat_id)
+        .where(Chat.telegram_id == chat_telegram_id)
+    )
+    return bool(value) if value is not None else True
 
 
 async def get_glupy_settings(

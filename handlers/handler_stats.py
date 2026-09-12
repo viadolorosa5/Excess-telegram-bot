@@ -267,7 +267,7 @@ async def build_statistics_text(
     quote_text = ""
     if quote:
         username, first_name, last_name, text, sent_at = quote
-        author = f"@{username}" if username else " ".join(
+        author = f"<code>@{username}</code>" if username else " ".join(
             part for part in (first_name, last_name) if part
         ) or "Неизвестный пользователь"
         quote_text = (

@@ -63,11 +63,15 @@ def format_user_statistics(
         common_emoji_count,
     ) in rows:
         if username and show_usernames:
-            name = f"<code>@{html.escape(username)}</code>"
+            display_name = f"<code>@{html.escape(username)}</code>"
         else:
-            name = " ".join(part for part in (first_name, last_name) if part)
-            name = name or "Неизвестный пользователь"
-        details = [f"• {html.escape(name)}: {count} сообщений, {characters} символов"]
+            display_name = html.escape(
+                " ".join(part for part in (first_name, last_name) if part)
+                or "Неизвестный пользователь"
+            )
+        details = [
+            f"• {display_name}: {count} сообщений, {characters} символов"
+        ]
         if not detailed:
             lines.append("\n".join(details))
             continue
@@ -107,7 +111,7 @@ def create_activity_chart(
     characters = [character_count for _, _, character_count in buckets]
 
     figure, (messages_axes, characters_axes) = plt.subplots(
-        2, 1, figsize=(10, 7), dpi=160, sharex=True
+        2, 1, figsize=(10, 7), dpi=160
     )
     messages_axes.plot(
         labels,
@@ -138,7 +142,10 @@ def create_activity_chart(
     output = BytesIO()
     figure.savefig(output, format="png", bbox_inches="tight")
     plt.close(figure)
-    return BufferedInputFile(output.getvalue(), filename="statistics.png")
+    return BufferedInputFile(
+        output.getvalue(),
+        filename=f"statistics_{period}_{id(output)}.png",
+    )
 
 
 async def build_activity_chart(

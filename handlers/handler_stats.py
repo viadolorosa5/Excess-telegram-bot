@@ -178,11 +178,14 @@ async def build_statistics_text(
         f"{format_user_statistics(users, detailed=True)}"
     )
     users_text = format_user_statistics(users, detailed=detailed)
+    stats_details = detailed_text if detailed else (
+        "👥 <b>По пользователям</b>\n" + users_text
+    )
     return (
         f"📊 <b>Статистика за {period_name}</b>\n\n"
         f"💬 Сообщений: <b>{count}</b>\n"
         f"🔤 Символов: <b>{characters}</b>\n"
-        f"{detailed_text if detailed else '👥 <b>По пользователям</b>\n' + users_text}"
+        f"{stats_details}"
         f"{quote_text if detailed else ''}"
     )
 

@@ -104,13 +104,33 @@ def create_activity_chart(
     characters = [character_count for _, _, character_count in buckets]
 
     figure, axes = plt.subplots(figsize=(10, 5), dpi=160)
-    axes.plot(labels, messages, marker="o", linewidth=2.2, label="Сообщения")
-    axes.plot(labels, characters, marker="o", linewidth=2.2, label="Символы")
+    characters_axes = axes.twinx()
+    messages_line = axes.plot(
+        labels,
+        messages,
+        color="#2563eb",
+        marker="o",
+        linewidth=2.2,
+        label="Сообщения",
+    )[0]
+    characters_line = characters_axes.plot(
+        labels,
+        characters,
+        color="#f97316",
+        marker="o",
+        linewidth=2.2,
+        label="Символы",
+    )[0]
     axes.set_title(f"Активность чата за {period_name}")
     axes.set_xlabel("Время" if period == "day" else "Дата")
-    axes.set_ylabel("Количество")
+    axes.set_ylabel("Сообщения", color="#2563eb")
+    characters_axes.set_ylabel("Символы", color="#f97316")
     axes.grid(True, alpha=0.25)
-    axes.legend()
+    axes.legend(
+        [messages_line, characters_line],
+        ["Сообщения", "Символы"],
+        loc="upper left",
+    )
     figure.autofmt_xdate()
     figure.tight_layout()
 
@@ -370,9 +390,17 @@ async def handle_statistics_callback(
         period=period,
         detailed=detailed,
     )
-    await callback.message.edit_text(
-        text,
-        parse_mode="HTML",
-        reply_markup=markup,
-    )
+    if callback.message.content_type == "photo":
+        await callback.message.delete()
+        await callback.message.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+    else:
+        await callback.message.edit_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
     await callback.answer()

@@ -228,11 +228,19 @@ async def handle_menu_back(callback: CallbackQuery) -> None:
         await callback.answer()
         return
     if callback.message:
-        await callback.message.edit_text(
-            menu_text(),
-            parse_mode="HTML",
-            reply_markup=main_menu_keyboard(),
-        )
+        if callback.message.content_type == "photo":
+            await callback.message.delete()
+            await callback.message.answer(
+                menu_text(),
+                parse_mode="HTML",
+                reply_markup=main_menu_keyboard(),
+            )
+        else:
+            await callback.message.edit_text(
+                menu_text(),
+                parse_mode="HTML",
+                reply_markup=main_menu_keyboard(),
+            )
     await callback.answer()
 
 

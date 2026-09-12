@@ -449,6 +449,35 @@ async def get_activity_insights(
     )
 
 
+async def get_activity_buckets(
+    session: AsyncSession,
+    *,
+    chat_telegram_id: int,
+    since: datetime.datetime,
+    bucket: str,
+) -> list[tuple[datetime.datetime, int, int]]:
+    bucket_expression = func.date_trunc(bucket, Message.sent_at).label("bucket")
+    query = (
+        select(
+            bucket_expression,
+            func.count(Message.id),
+            func.coalesce(func.sum(func.length(Message.message_text)), 0),
+        )
+        .join(Chat)
+        .where(
+            Chat.telegram_id == chat_telegram_id,
+            Message.sent_at >= since,
+        )
+        .group_by(bucket_expression)
+        .order_by(bucket_expression)
+    )
+    return [
+        (timestamp, int(message_count), int(character_count))
+        for timestamp, message_count, character_count
+        in (await session.execute(query)).all()
+    ]
+
+
 def extract_emojis(value: str) -> list[str]:
     return re.findall(
         r"[\U0001F1E6-\U0001F1FF\U0001F300-\U0001FAFF\u2600-\u27BF]",

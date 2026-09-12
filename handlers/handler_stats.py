@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from database.repository import (
     get_activity_insights,
+    get_activity_buckets,
     get_chat_statistics,
     get_most_frequent_word,
     get_rich_statistics,
@@ -79,6 +80,34 @@ def format_user_statistics(
     return "\n".join(lines)
 
 
+def format_bar(value: int, maximum: int, width: int = 12) -> str:
+    if maximum <= 0 or value <= 0:
+        return "·"
+    return "█" * max(1, round(value / maximum * width))
+
+
+def format_activity_charts(
+    buckets: list[tuple[datetime.datetime, int, int]],
+    *,
+    period: str,
+) -> str:
+    if not buckets:
+        return "📈 <b>Графики активности</b>\n\nНет данных за этот период."
+
+    max_messages = max(item[1] for item in buckets)
+    max_characters = max(item[2] for item in buckets)
+    lines = ["📈 <b>Графики активности</b>"]
+    for timestamp, messages, characters in buckets:
+        label = timestamp.strftime("%H:%M") if period == "day" else timestamp.strftime("%d.%m")
+        lines.append(
+            f"<code>{label}</code> "
+            f"💬 {format_bar(messages, max_messages)} <b>{messages}</b>  "
+            f"🔤 {format_bar(characters, max_characters)} <b>{characters}</b>"
+        )
+    lines.append("\n💬 сообщения   🔤 символы")
+    return "\n".join(lines)
+
+
 MEDIA_LABELS = {
     "photo": "🖼",
     "document": "📎",
@@ -97,6 +126,7 @@ async def build_statistics_text(
     chat_telegram_id: int,
     period: str,
     detailed: bool = False,
+    charts: bool = False,
 ) -> str:
     period_name, period_delta = PERIODS[period]
     since = datetime.datetime.now(datetime.UTC) - period_delta
@@ -111,6 +141,12 @@ async def build_statistics_text(
             session,
             chat_telegram_id=chat_telegram_id,
             since=since,
+        )
+        buckets = await get_activity_buckets(
+            session,
+            chat_telegram_id=chat_telegram_id,
+            since=since,
+            bucket="hour" if period == "day" else "day",
         )
         users = await get_user_statistics(
             session,
@@ -139,7 +175,14 @@ async def build_statistics_text(
         common_emoji,
         common_emoji_count,
     ) = rich
-    active_users, average_characters, peak_hour = insights
+    _, average_characters, peak_hour = insights
+    if charts:
+        return (
+            f"📊 <b>Статистика за {period_name}</b>\n\n"
+            f"💬 Сообщений: <b>{count}</b>\n"
+            f"🔤 Символов: <b>{characters}</b>\n\n"
+            f"{format_activity_charts(buckets, period=period)}"
+        )
     media_labels = {
         "photo": "🖼 Картинок",
         "document": "📎 Файлов",
@@ -190,7 +233,6 @@ async def build_statistics_text(
         else "\n"
     )
     detailed_text = (
-        f"👤 Активных участников: <b>{active_users}</b>\n"
         f"📏 В среднем символов в сообщении: <b>{average_characters:.1f}</b>\n"
         f"{peak_hour_text}"
         f"{extras_text + chr(10) + chr(10) if extras_text else ''}"
@@ -223,6 +265,7 @@ async def handle_stats(
         chat_telegram_id=message.chat.id,
         period="day",
         detailed=False,
+        charts=False,
     )
     await message.answer(
         text,
@@ -245,6 +288,7 @@ async def handle_menu_stats(
             chat_telegram_id=callback.message.chat.id,
             period="day",
             detailed=False,
+            charts=False,
         )
         await callback.message.edit_text(
             text,
@@ -268,7 +312,8 @@ async def handle_statistics_callback(
 
     parts = callback.data.split(":")
     period = parts[1] if len(parts) > 1 else ""
-    detailed = len(parts) == 3 and parts[2] == "1"
+    detailed = len(parts) > 2 and parts[2] == "1"
+    charts = len(parts) > 3 and parts[3] == "1"
     if period not in PERIODS:
         await callback.answer("Неизвестный период", show_alert=True)
         return
@@ -278,10 +323,11 @@ async def handle_statistics_callback(
         chat_telegram_id=callback.message.chat.id,
         period=period,
         detailed=detailed,
+        charts=charts,
     )
     await callback.message.edit_text(
         text,
         parse_mode="HTML",
-        reply_markup=statistics_keyboard(period, detailed),
+        reply_markup=statistics_keyboard(period, detailed, charts),
     )
     await callback.answer()

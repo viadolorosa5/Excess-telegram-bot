@@ -267,13 +267,17 @@ async def build_statistics_text(
     quote_text = ""
     if quote:
         username, first_name, last_name, text, sent_at = quote
-        author = f"<code>@{username}</code>" if username else " ".join(
-            part for part in (first_name, last_name) if part
-        ) or "Неизвестный пользователь"
+        if username:
+            author = f"<code>@{html.escape(username)}</code>"
+        else:
+            author = html.escape(
+                " ".join(part for part in (first_name, last_name) if part)
+                or "Неизвестный пользователь"
+            )
         quote_text = (
             f"\n\n💬 <b>Случайная цитата</b>\n"
             f"«{html.escape(text)}»\n"
-            f"— {html.escape(author)}, {sent_at.strftime('%d.%m.%Y %H:%M')}"
+            f"— {author}, {sent_at.strftime('%d.%m.%Y %H:%M')}"
         )
 
     frequent_text = (

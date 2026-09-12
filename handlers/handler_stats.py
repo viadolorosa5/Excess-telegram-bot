@@ -27,6 +27,8 @@ PERIODS = {
 
 def format_user_statistics(
     rows: list[tuple],
+    *,
+    detailed: bool,
 ) -> str:
     if not rows:
         return "нет сообщений"
@@ -50,7 +52,10 @@ def format_user_statistics(
         else:
             name = " ".join(part for part in (first_name, last_name) if part)
             name = name or "Неизвестный пользователь"
-        details = [f"• {html.escape(name)}: {count} сообщений, {characters} символов,"]
+        details = [f"• {html.escape(name)}: {count} сообщений, {characters} символов"]
+        if not detailed:
+            lines.append("\n".join(details))
+            continue
         media_parts = [
             f"{label}: <b>{media_counts[content_type]}</b>"
             for content_type, label in MEDIA_LABELS.items()
@@ -90,6 +95,7 @@ async def build_statistics_text(
     *,
     chat_telegram_id: int,
     period: str,
+    detailed: bool = False,
 ) -> str:
     period_name, period_delta = PERIODS[period]
     since = datetime.datetime.now(datetime.UTC) - period_delta
@@ -113,7 +119,6 @@ async def build_statistics_text(
         quote = await get_random_quote(
             session,
             chat_telegram_id=chat_telegram_id,
-            since=since,
         )
         rich = await get_rich_statistics(
             session,
@@ -137,7 +142,7 @@ async def build_statistics_text(
         for content_type, label in media_labels.items()
         if media_counts.get(content_type)
     ]
-    extras_lines = media_lines
+    extras_lines = media_lines if detailed else []
     if total_emojis:
         emoji_text = f"😀 Эмодзи: <b>{total_emojis}</b>"
         extras_lines.append(emoji_text)
@@ -166,15 +171,19 @@ async def build_statistics_text(
         if frequent_word
         else "нет данных"
     )
+    detailed_text = (
+        f"{extras_text + chr(10) + chr(10) if extras_text else ''}"
+        f"🔥 Частое слово: <b>{frequent_text}</b>\n\n"
+        "👥 <b>По пользователям</b>\n"
+        f"{format_user_statistics(users, detailed=True)}"
+    )
+    users_text = format_user_statistics(users, detailed=detailed)
     return (
         f"📊 <b>Статистика за {period_name}</b>\n\n"
         f"💬 Сообщений: <b>{count}</b>\n"
         f"🔤 Символов: <b>{characters}</b>\n"
-        f"{extras_text + chr(10) + chr(10) if extras_text else ''}"
-        f"🔥 Частое слово: <b>{frequent_text}</b>\n\n"
-        "👥 <b>По пользователям</b>\n"
-        f"{format_user_statistics(users)}"
-        f"{quote_text}"
+        f"{detailed_text if detailed else '👥 <b>По пользователям</b>\n' + users_text}"
+        f"{quote_text if detailed else ''}"
     )
 
 
@@ -189,6 +198,7 @@ async def handle_stats(
         session_factory,
         chat_telegram_id=message.chat.id,
         period="day",
+        detailed=False,
     )
     await message.answer(
         text,
@@ -210,6 +220,7 @@ async def handle_menu_stats(
             session_factory,
             chat_telegram_id=callback.message.chat.id,
             period="day",
+            detailed=False,
         )
         await callback.message.edit_text(
             text,
@@ -231,7 +242,9 @@ async def handle_statistics_callback(
         await callback.answer()
         return
 
-    period = callback.data.removeprefix("stats:")
+    parts = callback.data.split(":")
+    period = parts[1] if len(parts) > 1 else ""
+    detailed = len(parts) == 3 and parts[2] == "1"
     if period not in PERIODS:
         await callback.answer("Неизвестный период", show_alert=True)
         return
@@ -240,10 +253,11 @@ async def handle_statistics_callback(
         session_factory,
         chat_telegram_id=callback.message.chat.id,
         period=period,
+        detailed=detailed,
     )
     await callback.message.edit_text(
         text,
         parse_mode="HTML",
-        reply_markup=statistics_keyboard(period),
+        reply_markup=statistics_keyboard(period, detailed),
     )
     await callback.answer()
